@@ -6,13 +6,13 @@ import Nat "mo:base/Nat";
 import Char "mo:base/Char";
 
 actor PlayFair {
-    private let ALPHABET = "ABCDEFGHIKLMNOPQRSTUVWXYZ";
+    private let ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
     private type KeySquare = [[Text]];
     private type Position = (Nat, Nat);
 
     private func create_key_square(key : Text) : (KeySquare, HashMap.HashMap<Text, Position>) {
         let keySquare = Buffer.Buffer<Buffer.Buffer<Text>>(5);
-        let keyPos = HashMap.HashMap<Text, Position>(25, Text.equal, Text.hash);
+        let keyPos = HashMap.HashMap<Text, Position>(26, Text.equal, Text.hash);
 
         // Initialize the buffers
         var i = 0;
@@ -54,7 +54,7 @@ actor PlayFair {
         // Fill in the rest of the alphabet
         label fillAlphabetLoop for (char in Text.toIter(ALPHABET)) {
             let charText = Text.fromChar(char);
-            if (not keyInHashMap(charText)) {
+            if (charText != "J" and not keyInHashMap(charText)) {
                 addToKeySquare(charText);
                 if (row == 5) { break fillAlphabetLoop; }
             }
@@ -70,60 +70,53 @@ actor PlayFair {
     };
 
     private func preprocess_text(text : Text) : Text {
-    // First, trim spaces and convert to uppercase
-    // Explicitly remove all spaces
-    let noSpaces = Text.toUppercase(Text.replace(text, #char ' ', ""));
-    
-    let processed = Buffer.Buffer<Text>(noSpaces.size());
-    let chars = Text.toIter(noSpaces);
-
-    var previousChar : ?Text = null;
-
-    label l while (true) {
-        let charOpt = chars.next();
-        switch (charOpt) {
-            case (?char) {
-                let currentChar = if (char == 'J') "I" else Text.fromChar(char);
-                switch (previousChar) {
-                    case (?prevChar) {
-                        if (prevChar == currentChar) {
-                            processed.add(prevChar);
-                            processed.add("X");
-                            processed.add(currentChar);
-                            previousChar := null;
-                        } else {
-                            processed.add(prevChar);
-                            processed.add(currentChar);
-                            previousChar := null;
-                        }
-                    };
-                    case (null) {
-                        switch (chars.next()) {
-                            case (?nextChar) {
-                                let nextProcessedChar = if (nextChar == 'J') "I" else Text.fromChar(nextChar);
-                                if (currentChar == nextProcessedChar) {
-                                    processed.add(currentChar);
+        // Convert to uppercase and remove spaces
+        let upperCase = Text.toUppercase(text);
+        
+        let processed = Buffer.Buffer<Text>(upperCase.size());
+        let chars = Text.toIter(upperCase);
+        var previousChar : ?Text = null;
+        
+        label l while (true) {
+            let charOpt = chars.next();
+            switch (charOpt) {
+                case (?char) {
+                    if (Char.isAlphabetic(char)) {
+                        let currentChar = if (char == 'J') "I" else Text.fromChar(char);
+                        switch (previousChar) {
+                            case (?prevChar) {
+                                if (prevChar == currentChar) {
+                                    processed.add(prevChar);
                                     processed.add("X");
-                                    previousChar := ?nextProcessedChar;
+                                    previousChar := ?currentChar;
                                 } else {
+                                    processed.add(prevChar);
                                     processed.add(currentChar);
-                                    processed.add(nextProcessedChar);
                                     previousChar := null;
                                 }
                             };
                             case (null) {
-                                processed.add(currentChar);
+                                previousChar := ?currentChar;
+                            };
+                        }
+                    }
+                    // Non-alphabetic characters are simply ignored
+                };
+                case (null) {
+                    switch (previousChar) {
+                        case (?prevChar) {
+                            processed.add(prevChar);
+                            if (processed.size() % 2 != 0) {
                                 processed.add("X");
-                                previousChar := null;
                             };
                         };
+                        case (null) {};
                     };
-                }
-            };
-            case (null) { break l; };
-        }
-    };
-    Text.join("", processed.vals())
+                    break l;
+                };
+            }
+        };
+        Text.join("", processed.vals())
     };
 
     private func encrypt_pair(pair : (Text, Text), keySquare : KeySquare, keyPos : HashMap.HashMap<Text, Position>) : (Text, Text) {
